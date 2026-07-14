@@ -20,7 +20,7 @@ export default function FeaturesSection() {
     ];
 
     return (
-        <div className="w-full bg-gray-50 py-16 flex rounded-lg flex-col items-center justify-center">
+        <div className="col-span-12 gap-5 w-full bg-gray-50 py-16 flex rounded-lg flex-col items-center justify-center">
             <h1 className="text-slate-700 font-bold text-4xl mb-5">Tại sao chọn CyberShield?</h1>
             <p className="max-w-2xl text-center font-medium text-slate-600 mb-12 text-sm md:text-base leading-relaxed">
                 Chúng tôi áp dụng mô hình toán học chuẩn hóa kết hợp với hoán vị ngẫu nhiên cấu trúc

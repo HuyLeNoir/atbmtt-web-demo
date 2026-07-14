@@ -8,13 +8,6 @@ import { decryptImage, encryptImage } from "@/lib/cryptoEngine";
 interface ControlTab {
     className?: string;
 }
-interface PreviewImage {
-    file: File;
-    url: string;
-    width: number;
-    height: number;
-    rgbBytes: Uint8Array;
-}
 
 export default function ControlTab({ className }: ControlTab) {
     const [encImage, setEncImage] = useState<PreviewImage | null>(null);
