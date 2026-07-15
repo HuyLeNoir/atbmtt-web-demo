@@ -44,7 +44,7 @@ export default function App() {
     async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
         try {
-            router.push("/personal");
+            router.push("/inbox");
             return { success: true };
         } catch (error) {
             return { success: false };
