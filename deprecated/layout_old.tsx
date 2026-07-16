@@ -11,6 +11,8 @@ import {
     DialogFooter,
     DialogClose,
 } from "@/components/ui/dialog";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { clsx } from "clsx";
 import { usePathname, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -21,6 +23,7 @@ export default function personalLayout({ children }: { children: React.ReactNode
     const fileInputRef = useRef<HTMLInputElement>(null);
     const pathName = usePathname();
     const [UploadedImage, setUploadedImage] = useState<PreviewImage>();
+    const [IsSubmiting, setIsSubmiting] = useState<boolean>(false);
     function handleUpload() {
         fileInputRef.current?.click();
     }
@@ -69,6 +72,8 @@ export default function personalLayout({ children }: { children: React.ReactNode
             toast.error("Tải file thất bại");
         }
     }
+    //currentlyWorking
+
     return (
         <div className="h-screen grid grid-cols-12 gap-5 overflow-hidden">
             <div className="col-span-3 flex flex-col md:col-span-2 h-screen border border-border shadow-md px-2 py-5">
@@ -109,7 +114,7 @@ export default function personalLayout({ children }: { children: React.ReactNode
                             </DialogHeader>
                             <p>Upload</p>
                             <div className="w-full" onClick={handleUpload}>
-                                <div className="group p-5 transition-all duration-100 ease-in-out cursor-pointer hover:border-foreground border-dashed border-2 w-full h-full flex items-center flex-col gap-5 py-10 rounded-xl">
+                                <div className="group p-5 transition-all duration-100 ease-in-out cursor-pointer hover:border-foreground border-dashed border-2 w-full h-full flex items-center flex-col gap-5 py-5 rounded-xl">
                                     <p className="text-muted-foreground">
                                         Kéo thả ảnh gốc vào đây hoặc{" "}
                                         <span className="text-primary underline">
@@ -124,7 +129,7 @@ export default function personalLayout({ children }: { children: React.ReactNode
                                         accept="image/*"
                                     />
                                     <Upload
-                                        size={64}
+                                        size={48}
                                         className="text-muted-foreground transition-all duration-100 ease-in-out group-hover:text-foreground"
                                     />
                                     <p className="text-muted-foreground font-medium">
@@ -132,20 +137,35 @@ export default function personalLayout({ children }: { children: React.ReactNode
                                     </p>
                                 </div>
                             </div>
-                            <div>
-                                <p>Preview</p>
-                                <div className="wrapper">
-                                    {UploadedImage && (
-                                        <div className="w-full flex items-center justify-center rounded-lg p-5">
-                                            <img
-                                                src={UploadedImage.url}
-                                                alt="preview"
-                                                className="h-full max-h-32 aspect-square rounded-xl object-cover"
-                                            />
-                                        </div>
-                                    )}
+                            {/* Preview */}
+                            {UploadedImage && (
+                                <div>
+                                    <p>Preview</p>
+                                    <div className="wrapper">
+                                        {UploadedImage && (
+                                            <div className="w-full flex items-center justify-center rounded-lg p-5">
+                                                <img
+                                                    src={UploadedImage.url}
+                                                    alt="preview"
+                                                    className="h-full max-h-32 w-full aspect-square rounded-xl object-cover"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
+                            {UploadedImage && (
+                                <Field>
+                                    <FieldLabel htmlFor="input-field-receiver">
+                                        Người nhận
+                                    </FieldLabel>
+                                    <Input
+                                        id="input-field-receiver"
+                                        type="text"
+                                        placeholder="Enter your receiver id"
+                                    />
+                                </Field>
+                            )}
                             <DialogFooter>
                                 <DialogClose render={<Button variant="outline">Thoát</Button>} />
                                 <Button type="submit">Gửi</Button>

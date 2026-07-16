@@ -1,11 +1,13 @@
 "use server";
-import { promises as fs } from "node:fs";
-
 import crypto from "crypto";
 import JSZip from "jszip";
-import { promisify } from "util";
-import path from "path";
 
+interface EncryptInput {
+    rgbBytes: Uint8Array;
+    receiver_public_key: string;
+    width: number;
+    height: number;
+}
 // Seeded pseudorandom number generator (Mulberry32)
 function createPRNG(seed: number) {
     let h = seed | 0;
@@ -18,7 +20,6 @@ function createPRNG(seed: number) {
         return (z >>> 0) / 4294967296;
     };
 }
-const generateKeyPairAsync = promisify(crypto.generateKeyPair);
 
 // Pixel Shuffling
 function preprocessAndShuffle(pixels: Uint8Array, seed: number) {
@@ -108,7 +109,6 @@ function layeredEncrypt5Stages(
 
     return C5;
 }
-
 // 5-Stage Multi-Layer Decryption (Reverse order)
 function layeredDecrypt5Stages(
     C5: Buffer,
@@ -154,12 +154,6 @@ function generateCryptoKeysAndIVs() {
             IV5: crypto.randomBytes(8),
         },
     };
-}
-interface EncryptInput {
-    rgbBytes: Uint8Array;
-    receiver_public_key: string;
-    width: number;
-    height: number;
 }
 
 export async function encryptImage(input: EncryptInput) {

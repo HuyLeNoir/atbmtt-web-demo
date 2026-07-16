@@ -1,5 +1,5 @@
 "use client";
-import { Shield, LogOut, Pencil, Upload } from "lucide-react";
+import { Shield, LogOut, Pencil, Upload, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -11,20 +11,27 @@ import {
     DialogFooter,
     DialogClose,
 } from "@/components/ui/dialog";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { clsx } from "clsx";
 import { usePathname, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { PreviewImage } from "@/lib/definitions";
+import { EncryptAndSend } from "@/lib/cryptoEngine2";
+import { publicKeyFromUsername } from "@/lib/server_actions";
 export default function personalLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const pathName = usePathname();
     const [UploadedImage, setUploadedImage] = useState<PreviewImage>();
+    const [IsSubmiting, setIsSubmiting] = useState<boolean>(false);
+    const [receivers, setReceivers] = useState<string[]>([]);
+    const [inputValue, setInputValue] = useState<string>("");
     function handleUpload() {
         fileInputRef.current?.click();
     }
-    async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0];
         if (!file) {
             return;
@@ -56,6 +63,7 @@ export default function personalLayout({ children }: { children: React.ReactNode
                 }
                 setUploadedImage({
                     file: file,
+                    filename: file.name,
                     width: width,
                     height: height,
                     url: url,
@@ -67,6 +75,65 @@ export default function personalLayout({ children }: { children: React.ReactNode
             img.src = url;
         } catch (err) {
             toast.error("Tải file thất bại");
+        }
+    }
+    function handleInputChange(inputValue: string) {
+        setInputValue(inputValue);
+    }
+    function addReceiver() {
+        const value = inputValue?.trim();
+        if (!value) return;
+        if (receivers.includes(value)) {
+            toast.warning(`${value} đã tồn tại`);
+            return;
+        }
+        setInputValue("");
+        toast.success(`Thêm thành công ${value}`);
+        setReceivers((prev) => [...prev, value]);
+    }
+    function removeReceiver(target: string) {
+        setReceivers((prev) => prev.filter((item) => item !== target));
+    }
+    function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+        if (e.key === " " || e.code === "Space") {
+            // Prevent default to avoid adding a space character in the input
+            e.preventDefault();
+        }
+        if (e.key === "Enter") {
+            e.preventDefault();
+            addReceiver();
+        }
+    }
+    //currentlyWorking
+    async function handleSubmit() {
+        console.log("handleSubmit called");
+        if (!inputValue) return;
+        if (!UploadedImage) {
+            toast.error("Vui lòng tải lên một ảnh trước khi gửi.");
+            return;
+        }
+
+        setIsSubmiting(true);
+        try {
+            const result = await EncryptAndSend({
+                username_send: "huyle",
+                username_receive: inputValue, //temp
+                image_byte: UploadedImage.rgbBytes,
+                image_width: UploadedImage.width,
+                image_height: UploadedImage.height,
+                filename: UploadedImage.filename,
+            });
+
+            if (result.success) {
+                toast.success(result.message);
+            } else {
+                toast.error(result.message);
+            }
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Gửi file thất bại";
+            toast.error(message);
+        } finally {
+            setIsSubmiting(false);
         }
     }
     return (
@@ -83,10 +150,11 @@ export default function personalLayout({ children }: { children: React.ReactNode
                 </div>
                 {/* Action */}
                 <Dialog>
-                    <form>
+                    <form onSubmit={handleSubmit}>
                         <DialogTrigger
                             render={
                                 <Button
+                                    type="button"
                                     className={
                                         "text-lg px-3 py-5 w-full mt-10 hover:shadow-sm cursor-pointer transition-all duration-300 ease-in-out "
                                     }
@@ -109,7 +177,7 @@ export default function personalLayout({ children }: { children: React.ReactNode
                             </DialogHeader>
                             <p>Upload</p>
                             <div className="w-full" onClick={handleUpload}>
-                                <div className="group p-5 transition-all duration-100 ease-in-out cursor-pointer hover:border-foreground border-dashed border-2 w-full h-full flex items-center flex-col gap-5 py-10 rounded-xl">
+                                <div className="group p-5 transition-all duration-100 ease-in-out cursor-pointer hover:border-foreground border-dashed border-2 w-full h-full flex items-center flex-col gap-5 py-5 rounded-xl">
                                     <p className="text-muted-foreground">
                                         Kéo thả ảnh gốc vào đây hoặc{" "}
                                         <span className="text-primary underline">
@@ -124,7 +192,7 @@ export default function personalLayout({ children }: { children: React.ReactNode
                                         accept="image/*"
                                     />
                                     <Upload
-                                        size={64}
+                                        size={48}
                                         className="text-muted-foreground transition-all duration-100 ease-in-out group-hover:text-foreground"
                                     />
                                     <p className="text-muted-foreground font-medium">
@@ -132,23 +200,73 @@ export default function personalLayout({ children }: { children: React.ReactNode
                                     </p>
                                 </div>
                             </div>
-                            <div>
-                                <p>Preview</p>
-                                <div className="wrapper">
-                                    {UploadedImage && (
-                                        <div className="w-full flex items-center justify-center rounded-lg p-5">
-                                            <img
-                                                src={UploadedImage.url}
-                                                alt="preview"
-                                                className="h-full max-h-32 aspect-square rounded-xl object-cover"
-                                            />
-                                        </div>
-                                    )}
+                            {/* Preview */}
+                            {UploadedImage && (
+                                <div>
+                                    <p>Preview</p>
+                                    <div className="wrapper">
+                                        {UploadedImage && (
+                                            <div className="w-full flex items-center justify-center rounded-lg p-5">
+                                                <img
+                                                    src={UploadedImage.url}
+                                                    alt="preview"
+                                                    className="h-full max-h-32 w-full aspect-square rounded-xl object-cover"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
+                            {UploadedImage && (
+                                <Field>
+                                    <FieldLabel htmlFor="input-field-receiver">
+                                        Người nhận
+                                    </FieldLabel>
+                                    <div className="flex gap-2 items-center w-full flex-wrap">
+                                        {receivers?.map((receiver, index) => (
+                                            <span
+                                                onClick={(e) => {
+                                                    removeReceiver(receiver);
+                                                }}
+                                                key={index}
+                                                className="group hover:bg-destructive relative cursor-pointer px-3 py-1 bg-primary text-primary-foreground rounded-lg"
+                                            >
+                                                <span className="group-hover:invisible">
+                                                    {receiver}
+                                                </span>
+                                                <span className="absolute w-full h-full inset-0 flex justify-center items-center opacity-0 group-hover:opacity-100 text-white">
+                                                    <Trash2 size={18}></Trash2>
+                                                </span>
+                                            </span>
+                                        ))}
+                                    </div>
+                                    <Input
+                                        value={inputValue || ""}
+                                        onKeyDown={handleKeyDown}
+                                        onChange={(e) => {
+                                            handleInputChange(e.target.value);
+                                        }}
+                                        id="input-field-receiver"
+                                        type="text"
+                                        placeholder="Enter your receiver id"
+                                    />
+                                </Field>
+                            )}
                             <DialogFooter>
-                                <DialogClose render={<Button variant="outline">Thoát</Button>} />
-                                <Button type="submit">Gửi</Button>
+                                <DialogClose
+                                    render={
+                                        <Button type="button" variant="outline">
+                                            Thoát
+                                        </Button>
+                                    }
+                                />
+                                <Button
+                                    className={"cursor-pointer"}
+                                    onClick={handleSubmit}
+                                    disabled={IsSubmiting}
+                                >
+                                    Gửi
+                                </Button>
                             </DialogFooter>
                         </DialogContent>
                     </form>

@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { LockIcon, UnlockIcon, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { decryptImage, encryptImage } from "@/lib/cryptoEngine";
+import { decryptImage, encryptImage } from "@/deprecated/cryptoEngine";
 interface ControlTab {
     className?: string;
 }

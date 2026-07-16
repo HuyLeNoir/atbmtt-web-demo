@@ -1,4 +1,5 @@
 import { encryptPrivateKey, decryptPrivateKey, createECCKeys, register, login } from "@/lib/auth";
+import { publicKeyFromUsername } from "./server_actions";
 function testEncryptionFlow() {
     console.log("=== BẮT ĐẦU KIỂM TRA HÀM MÃ HÓA / GIẢI MÃ ===");
 
@@ -56,4 +57,17 @@ async function run() {
     const result = await login("huyle", "nigabaka");
     console.log(result);
 }
-run();
+//login and register test success
+
+// run();
+
+async function test_key(username: string) {
+    const result = await publicKeyFromUsername(username);
+    console.log(result);
+}
+test_key("huyle"); //expected: "pubjeyhuyle" :passed
+async function seed_user(username: string, password: string) {
+    const result = await register(username, password);
+    console.log(result);
+}
+seed_user("nghiatrong", "nghiamoiden");
