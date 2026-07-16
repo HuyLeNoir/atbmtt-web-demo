@@ -317,6 +317,7 @@ export async function encryptPackage(input: EncryptInput): Promise<EncryptResult
     });
 
     // Import receiver's public key
+    //modifed to be multi receipients here
     const res = await publicKeyFromUsername(username_receive); //ERROR
     const receiver_public_key = res.package?.public_key;
     console.log(receiver_public_key);
@@ -361,7 +362,7 @@ export async function encryptPackage(input: EncryptInput): Promise<EncryptResult
     return {
         finalZip: finalZipBuffer,
         encryptedFileKey: encrypted_k_file,
-        originalFilename: input.filename + ".zip",
+        originalFilename: input.filename,
     };
 }
 export async function savePackage(file: Buffer, filename: string): Promise<string> {
@@ -424,7 +425,7 @@ export async function createPackageRecord(input: CreatePackageRecordInput) {
             `INSERT INTO packages_recipients
             (image_id, recipient_id, encrypted_file_key)
             VALUES (?, ?, ?)`,
-            [packageId, recipientId, input.encryptedFileKey],
+            [packageId, recipientId, input.encryptedFileKey.toString("hex")],
         );
 
         await conn.commit();

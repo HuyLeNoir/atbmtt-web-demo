@@ -70,4 +70,4 @@ async function seed_user(username: string, password: string) {
     const result = await register(username, password);
     console.log(result);
 }
-seed_user("nghiatrong", "nghiamoiden");
+seed_user("anotherbaka", "1234567");

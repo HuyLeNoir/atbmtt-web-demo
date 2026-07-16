@@ -107,7 +107,9 @@ export default function personalLayout({ children }: { children: React.ReactNode
     //currentlyWorking
     async function handleSubmit() {
         console.log("handleSubmit called");
-        if (!inputValue) return;
+        if (!inputValue) {
+            toast.error("LOL");
+        }
         if (!UploadedImage) {
             toast.error("Vui lòng tải lên một ảnh trước khi gửi.");
             return;
