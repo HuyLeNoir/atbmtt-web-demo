@@ -17,6 +17,9 @@ import ReactCompareImage from "react-compare-image";
 
 import { Shield, Cpu, Clock } from "lucide-react"; // Hoặc dùng icon của bạn
 import { useRouter } from "next/navigation";
+import { login, register } from "@/lib/auth";
+import { toast } from "sonner";
+import { useAuth } from "./context/authcontext";
 
 const cards = [
     {
@@ -38,17 +41,46 @@ const cards = [
 
 export default function App() {
     const router = useRouter();
-
+    const { loginUser } = useAuth();
     const [authTab, setAuthTab] = useState<"login" | "register">("login");
-
     async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
-        try {
-            router.push("/inbox");
-            return { success: true };
-        } catch (error) {
-            return { success: false };
+        const formData = new FormData(e.currentTarget);
+        const data = Object.fromEntries(formData) as Record<string, string>;
+        const { username, password } = data;
+        const result = await login(username, password);
+        if (!result.success || !result) {
+            toast.error(`Đăng nhập thất bại. Lỗi: ${result.message}`);
+            return;
         }
+        loginUser(result.package?.id, username, result.package?.decrypted_private_key);
+        toast.success("Đăng nhập thành công");
+        router.push("/inbox");
+    }
+
+    async function handleRegister(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault();
+        console.log("hello from handle register");
+        const formData = new FormData(e.currentTarget);
+        const data = Object.fromEntries(formData) as Record<string, string>;
+        const { username, password, repassword } = data;
+        if (password !== repassword) {
+            toast.error("Mật khẩu không khớp!");
+            return;
+        }
+        const result = await register(username, password);
+        if (!result.success || !result) {
+            toast.error(`Đăng ký thất bại. Lỗi: ${result.message}`);
+            return;
+        }
+        const loginResult = await login(username, password);
+        if (!loginResult.success || !result) {
+            toast.error(`Đăng nhập thất bại. Lỗi: ${result.message}`);
+            return;
+        }
+        loginUser(result.package?.id, username, loginResult.package?.decrypted_private_key);
+        toast.success("Đăng ký thành công");
+        router.push("/inbox");
     }
     return (
         <div className="w-full flex flex-col">
@@ -147,6 +179,7 @@ export default function App() {
                                             <Label htmlFor="account">Tài khoản</Label>
                                             <Input
                                                 id="account"
+                                                name="username"
                                                 type="text"
                                                 placeholder="Vui lòng nhập tên tài khoản"
                                                 required
@@ -154,7 +187,12 @@ export default function App() {
                                         </div>
                                         <div className="grid gap-2" id="login">
                                             <Label htmlFor="password">Password</Label>
-                                            <Input id="password" type="password" required />
+                                            <Input
+                                                name="password"
+                                                id="password"
+                                                type="password"
+                                                required
+                                            />
                                         </div>
                                     </div>
                                 </form>
@@ -189,11 +227,12 @@ export default function App() {
                                 </CardAction>
                             </CardHeader>
                             <CardContent>
-                                <form>
+                                <form id="register-form" onSubmit={handleRegister}>
                                     <div className="flex flex-col gap-6">
                                         <div className="grid gap-2">
                                             <Label htmlFor="account">Tài khoản</Label>
                                             <Input
+                                                name="username"
                                                 id="account"
                                                 type="text"
                                                 placeholder="Vui lòng nhập tên tài khoản"
@@ -202,17 +241,31 @@ export default function App() {
                                         </div>
                                         <div className="grid gap-2" id="login">
                                             <Label htmlFor="password">Password</Label>
-                                            <Input id="password" type="password" required />
+                                            <Input
+                                                name="password"
+                                                id="password"
+                                                type="password"
+                                                required
+                                            />
                                         </div>
                                         <div className="grid gap-2" id="login">
                                             <Label htmlFor="re-password">Nhập lại password</Label>
-                                            <Input id="re-password" type="password" required />
+                                            <Input
+                                                name="repassword"
+                                                id="repassword"
+                                                type="password"
+                                                required
+                                            />
                                         </div>
                                     </div>
                                 </form>
                             </CardContent>
                             <CardFooter className="flex-col gap-2">
-                                <Button type="submit" className="cursor-pointer w-full">
+                                <Button
+                                    form="register-form"
+                                    type="submit"
+                                    className="cursor-pointer w-full"
+                                >
                                     Đăng ký
                                 </Button>
                             </CardFooter>

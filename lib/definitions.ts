@@ -19,14 +19,3 @@ export interface User {
     password_hash: string;
     created_at: string;
 }
-
-export interface EncryptInput {
-    //id_send
-    //id_receive
-    username_send: string;
-    username_receive: string;
-    filename: string;
-    image_byte: Uint8Array;
-    image_width: number;
-    image_height: Number;
-}

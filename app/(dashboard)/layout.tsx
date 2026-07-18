@@ -15,19 +15,34 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { clsx } from "clsx";
 import { usePathname, useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PreviewImage } from "@/lib/definitions";
 import { EncryptAndSend } from "@/lib/cryptoEngine2";
-import { publicKeyFromUsername } from "@/lib/server_actions";
+import { useAuth } from "../context/authcontext";
+import { ScreenSpinner, Spinner } from "@/components/ui/spinner";
 export default function personalLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const pathName = usePathname();
     const [UploadedImage, setUploadedImage] = useState<PreviewImage>();
     const [IsSubmiting, setIsSubmiting] = useState<boolean>(false);
     const [receivers, setReceivers] = useState<string[]>([]);
     const [inputValue, setInputValue] = useState<string>("");
+    const [isLoading, setIsLoading] = useState(true);
+    const { auth, logoutUser } = useAuth();
+    useEffect(() => {
+        // Nếu auth đang trong quá trình load
+        // thì chưa làm gì cả, tiếp tục đợi.
+        if (auth === undefined) return;
+
+        if (!auth || !auth.username) {
+            // Nếu đã load xong auth mà KHÔNG có username -> đá về trang chủ ngay lập tức
+            router.replace("/");
+        } else {
+            // Chỉ khi có đầy đủ auth.username mới tắt loading để hiển thị giao diện
+            setIsLoading(false);
+        }
+    }, [auth, router]); // QUAN TRỌNG: Phải theo dõi auth và router
     function handleUpload() {
         fileInputRef.current?.click();
     }
@@ -106,10 +121,6 @@ export default function personalLayout({ children }: { children: React.ReactNode
     }
     //currentlyWorking
     async function handleSubmit() {
-        console.log("handleSubmit called");
-        if (!inputValue) {
-            toast.error("LOL");
-        }
         if (!UploadedImage) {
             toast.error("Vui lòng tải lên một ảnh trước khi gửi.");
             return;
@@ -117,9 +128,10 @@ export default function personalLayout({ children }: { children: React.ReactNode
 
         setIsSubmiting(true);
         try {
+            if (!auth || !auth.username) throw new Error("Không tìm thấy username");
             const result = await EncryptAndSend({
-                username_send: "huyle",
-                username_receive: inputValue, //temp
+                username_send: auth.username,
+                recipients: receivers, //temp
                 image_byte: UploadedImage.rgbBytes,
                 image_width: UploadedImage.width,
                 image_height: UploadedImage.height,
@@ -138,7 +150,9 @@ export default function personalLayout({ children }: { children: React.ReactNode
             setIsSubmiting(false);
         }
     }
-    return (
+    return isLoading ? (
+        <ScreenSpinner />
+    ) : (
         <div className="h-screen grid grid-cols-12 gap-5 overflow-hidden">
             <div className="col-span-3 flex flex-col md:col-span-2 h-screen border border-border shadow-md px-2 py-5">
                 {/* Logo */}
@@ -163,7 +177,7 @@ export default function personalLayout({ children }: { children: React.ReactNode
                                     variant={"outline"}
                                     size={"lg"}
                                 >
-                                    <Pencil />
+                                    <Pencil data-icon="inline-start" />
                                     Send
                                 </Button>
                             }
@@ -267,7 +281,7 @@ export default function personalLayout({ children }: { children: React.ReactNode
                                     onClick={handleSubmit}
                                     disabled={IsSubmiting}
                                 >
-                                    Gửi
+                                    {IsSubmiting ? <Spinner className="size-4" /> : "Gửi"}
                                 </Button>
                             </DialogFooter>
                         </DialogContent>
@@ -275,39 +289,27 @@ export default function personalLayout({ children }: { children: React.ReactNode
                 </Dialog>
                 {/* Menu */}
                 <div className="px-2 flex flex-col mt-2.5">
-                    <button
+                    {/* <Button
                         onClick={() => {
                             router.replace("/inbox");
                         }}
-                        className={clsx(
-                            "py-1 px-3 w-full text-left rounded-lg hover:text-secondary-foreground transition-all duration-150 cursor-pointer ease-in-out",
-                            pathName == "/inbox"
-                                ? "text-bold bg-secondary text-secondary-foreground"
-                                : " hover:bg-secondary",
-                        )}
+                        variant={"outline"}
                     >
                         Inbox
-                    </button>
-                    <button
-                        onClick={() => {
-                            router.replace("/sent");
-                        }}
-                        className={clsx(
-                            "py-1 px-3 w-full text-left rounded-lg hover:text-secondary-foreground transition-all duration-150 cursor-pointer ease-in-out",
-                            pathName == "/sent"
-                                ? "text-bold bg-secondary text-secondary-foreground"
-                                : " hover:bg-secondary",
-                        )}
-                    >
-                        Sent
-                    </button>
+                    </Button> */}
                 </div>
                 {/* logout */}
-                <div className="mt-auto mb-10">
-                    <button className="p-1 flex items-center gap-2.5 w-full hover:bg-secondary rounded-lg hover:text-secondary-foreground transition-all duration-150 cursor-pointer ease-in-out hover:scale-105">
-                        <LogOut className="w-5 h-5" />
+                <div className="mt-auto">
+                    <Button
+                        onClick={() => {
+                            toast.success("Đăng xuất thành công");
+                            logoutUser();
+                        }}
+                        variant={"outline"}
+                    >
+                        <LogOut data-icon="inline-start" className="w-5 h-5" />
                         Logout
-                    </button>
+                    </Button>
                 </div>
             </div>
             <div className="col-span-9 md:col-span-10 h-full overflow-y-auto">{children}</div>

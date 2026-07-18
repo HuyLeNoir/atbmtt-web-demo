@@ -2,7 +2,6 @@
 import crypto from "crypto";
 import JSZip from "jszip";
 import fs from "fs/promises";
-import { EncryptInput, ServerMessage } from "./definitions";
 import { publicKeyFromUsername } from "@/lib/server_actions";
 function createPRNG(seed: number) {
     let h = seed | 0;
@@ -152,7 +151,7 @@ function generateCryptoKeysAndIVs() {
 }
 
 // export async function EncryptAndSend(input: EncryptInput): Promise<ServerMessage> {
-//     const { username_send, username_receive, image_byte, image_width, image_height } = input;
+//     const { username_send, recipients, image_byte, image_width, image_height } = input;
 
 //     if (!image_byte || image_byte.length === 0) {
 //         throw new Error("Dữ liệu hình ảnh RGB không hợp lệ hoặc trống.");
@@ -265,13 +264,27 @@ function generateCryptoKeysAndIVs() {
 
 export interface EncryptResult {
     finalZip: Buffer;
-    encryptedFileKey: Buffer;
+    encryptedFileKeys: encrypted_k_file[];
     originalFilename: string;
     signature?: Buffer;
 }
 
+export interface EncryptInput {
+    //id_send
+    //id_receive
+    username_send: string;
+    recipients: string[];
+    filename: string;
+    image_byte: Uint8Array;
+    image_width: number;
+    image_height: number;
+}
+interface encrypted_k_file {
+    recipient: string;
+    encrypted_key: Buffer;
+}
 export async function encryptPackage(input: EncryptInput): Promise<EncryptResult> {
-    const { username_send, username_receive, image_byte, image_width, image_height } = input;
+    const { username_send, recipients, image_byte, image_width, image_height } = input;
 
     if (!image_byte || image_byte.length === 0) {
         throw new Error("Dữ liệu hình ảnh RGB không hợp lệ hoặc trống.");
@@ -318,38 +331,52 @@ export async function encryptPackage(input: EncryptInput): Promise<EncryptResult
 
     // Import receiver's public key
     //modifed to be multi receipients here
-    const res = await publicKeyFromUsername(username_receive); //ERROR
-    const receiver_public_key = res.package?.public_key;
-    console.log(receiver_public_key);
-    if (!receiver_public_key) {
-        throw new Error("Không tìm thấy public key của người nhận.");
-    }
-    const receiverPubKeyObject = crypto.createPublicKey(receiver_public_key);
-
-    // Compute Shared Secret
-    const sharedSecret = crypto.diffieHellman({
-        privateKey: ephemeralKey.privateKey,
-        publicKey: receiverPubKeyObject,
-    });
-
-    // Derive K_ECC via HKDF
-    const K_ECC = Buffer.from(
-        crypto.hkdfSync("sha256", sharedSecret, Buffer.alloc(0), Buffer.from("key-exchange"), 32),
-    );
-
-    // 8. Encrypt K_file using AES-256-GCM based on K_ECC
     const nonce_gcm = crypto.randomBytes(12);
-    const cipher_gcm = crypto.createCipheriv("aes-256-gcm", K_ECC, nonce_gcm);
-    const encrypted_k_file = Buffer.concat([cipher_gcm.update(K_file), cipher_gcm.final()]);
-    const auth_tag = cipher_gcm.getAuthTag();
+    const encrypted_recipients_key: encrypted_k_file[] = [];
+    for (const recipient of recipients) {
+        const res = await publicKeyFromUsername(recipient); //ERROR
+        const receiver_public_key = res.package?.public_key;
+        console.log(receiver_public_key);
+        if (!receiver_public_key) {
+            throw new Error("Không tìm thấy public key của người nhận.");
+        }
+        const receiverPubKeyObject = crypto.createPublicKey(receiver_public_key);
+
+        // Compute Shared Secret
+        const sharedSecret = crypto.diffieHellman({
+            privateKey: ephemeralKey.privateKey,
+            publicKey: receiverPubKeyObject,
+        });
+        // Derive K_ECC via HKDF
+        const K_ECC = Buffer.from(
+            crypto.hkdfSync(
+                "sha256",
+                sharedSecret,
+                Buffer.alloc(0),
+                Buffer.from("key-exchange"),
+                32,
+            ),
+        );
+
+        // 8. Encrypt K_file using AES-256-GCM based on K_ECC
+        const cipher_gcm = crypto.createCipheriv("aes-256-gcm", K_ECC, nonce_gcm);
+        const ciphertext = Buffer.concat([cipher_gcm.update(K_file), cipher_gcm.final()]);
+        const auth_tag = cipher_gcm.getAuthTag();
+        const encrypted_key_with_tag = Buffer.concat([ciphertext, auth_tag]);
+        encrypted_recipients_key.push({
+            recipient: recipient,
+            encrypted_key: encrypted_key_with_tag,
+        });
+    }
+    // const auth_tag = cipher_gcm.getAuthTag();
 
     // 9. Package final outer zip
     const outerZip = new JSZip();
     outerZip.file("encrypted_my_files.zip", encrypted_metadata_zip);
-    outerZip.file("encrypted_aes_key.bin", encrypted_k_file);
+    // outerZip.file("encrypted_aes_key.bin", encrypted_k_file); //should be remove if each user have different encrypted_k_file for the same pacakge
     outerZip.file("iv_cfb.bin", iv_cfb);
     outerZip.file("nonce_gcm.bin", nonce_gcm);
-    outerZip.file("auth_tag.bin", auth_tag);
+    // outerZip.file("auth_tag.bin", auth_tag);
     outerZip.file(
         "ephemeral_public_key.pem",
         ephemeralKey.publicKey.export({ type: "spki", format: "pem" }),
@@ -361,13 +388,14 @@ export async function encryptPackage(input: EncryptInput): Promise<EncryptResult
 
     return {
         finalZip: finalZipBuffer,
-        encryptedFileKey: encrypted_k_file,
+        encryptedFileKeys: encrypted_recipients_key,
         originalFilename: input.filename,
     };
 }
+
 export async function savePackage(file: Buffer, filename: string): Promise<string> {
     const id = crypto.randomUUID();
-    const storagePath = `uploads/${id}_${filename}`;
+    const storagePath = `uploads/${id}_${filename}.zip`;
 
     await fs.writeFile(storagePath, file);
 
@@ -378,12 +406,11 @@ import pool from "@/lib/db";
 
 interface CreatePackageRecordInput {
     ownerUsername: string;
-    recipientUsername: string;
+    recipients: { recipientUsername: string; encryptedFileKey: Buffer }[];
 
     filename: string;
     storagePath: string;
 
-    encryptedFileKey: Buffer;
     signature?: Buffer;
 }
 
@@ -399,16 +426,7 @@ export async function createPackageRecord(input: CreatePackageRecordInput) {
         ]);
 
         if (ownerRows.length === 0) throw new Error("Owner không tồn tại.");
-
-        // Recipient
-        const [recipientRows]: any = await conn.execute(`SELECT id FROM users WHERE username = ?`, [
-            input.recipientUsername,
-        ]);
-
-        if (recipientRows.length === 0) throw new Error("Recipient không tồn tại.");
-
         const ownerId = ownerRows[0].id;
-        const recipientId = recipientRows[0].id;
 
         // Package
         const [packageResult]: any = await conn.execute(
@@ -420,13 +438,27 @@ export async function createPackageRecord(input: CreatePackageRecordInput) {
 
         const packageId = packageResult.insertId;
 
-        // Recipient mapping
-        await conn.execute(
-            `INSERT INTO packages_recipients
-            (image_id, recipient_id, encrypted_file_key)
-            VALUES (?, ?, ?)`,
-            [packageId, recipientId, input.encryptedFileKey.toString("hex")],
-        );
+        // Recipient mappings
+        for (const rec of input.recipients) {
+            const [recipientRows]: any = await conn.execute(
+                `SELECT id FROM users WHERE username = ?`,
+                [rec.recipientUsername],
+            );
+
+            if (recipientRows.length === 0) {
+                console.warn(`Recipient ${rec.recipientUsername} không tồn tại, bỏ qua.`);
+                continue;
+            }
+
+            const recipientId = recipientRows[0].id;
+
+            await conn.execute(
+                `INSERT INTO packages_recipients
+                (image_id, recipient_id, encrypted_file_key)
+                VALUES (?, ?, ?)`,
+                [packageId, recipientId, rec.encryptedFileKey.toString("hex")],
+            );
+        }
 
         await conn.commit();
 
@@ -438,26 +470,27 @@ export async function createPackageRecord(input: CreatePackageRecordInput) {
         conn.release();
     }
 }
+
 export async function EncryptAndSend(input: EncryptInput) {
-    console.log("eNs called");
-    // 1
+    console.log("EncryptAndSend called");
+    // 1. Encrypt package
     const encrypted = await encryptPackage(input);
 
-    // 2
+    // 2. Save package file to disk
     const storagePath = await savePackage(encrypted.finalZip, encrypted.originalFilename);
 
-    // 3
+    // 3. Map the recipients list
+    const recipientsMap = encrypted.encryptedFileKeys.map((item) => ({
+        recipientUsername: item.recipient,
+        encryptedFileKey: item.encrypted_key,
+    }));
+
+    // 4. Create package record in DB
     await createPackageRecord({
         ownerUsername: input.username_send,
-
-        recipientUsername: input.username_receive,
-
+        recipients: recipientsMap,
         filename: encrypted.originalFilename,
-
         storagePath,
-
-        encryptedFileKey: encrypted.encryptedFileKey,
-
         signature: encrypted.signature,
     });
 
@@ -587,5 +620,155 @@ export async function decryptImage(input: { zipFile: File; receiver_private_key:
         };
     } catch (error) {
         throw new Error("Giai ma that bai");
+    }
+}
+
+export async function decryptStoredPackage(input: {
+    storagePath: string;
+    recipientUsername: string;
+    receiver_private_key: string;
+}) {
+    try {
+        const { storagePath, recipientUsername, receiver_private_key } = input;
+        // 1. Get recipient ID
+        const conn = await pool.getConnection();
+        let recipientId: number;
+        let encryptedKeyHex: string;
+        let filename: string;
+        try {
+            const [userRows]: any = await conn.execute("SELECT id FROM users WHERE username = ?", [
+                recipientUsername,
+            ]);
+            if (userRows.length === 0) {
+                throw new Error("Không tìm thấy người nhận.");
+            }
+            recipientId = userRows[0].id;
+
+            // 2. Fetch the package and verify recipient
+            const [pkgRows]: any = await conn.execute(
+                `SELECT pk.id as package_id, pk.filename, pk_re.encrypted_file_key 
+                    FROM packages pk 
+                    JOIN packages_recipients pk_re ON pk.id = pk_re.image_id 
+                    WHERE pk.storage_path = ? AND pk_re.recipient_id = ?`,
+                [storagePath, recipientId],
+            );
+
+            if (pkgRows.length === 0) {
+                throw new Error("Không có quyền truy cập hoặc package không tồn tại.");
+            }
+            encryptedKeyHex = pkgRows[0].encrypted_file_key;
+            filename = pkgRows[0].filename;
+        } finally {
+            conn.release();
+        }
+
+        // 3. Read the encrypted zip file from server disk
+        const archiveBuffer = await fs.readFile(storagePath);
+
+        // 4. Outer ZIP
+        const outerZip = await JSZip.loadAsync(archiveBuffer);
+
+        const encryptedMetadataZip = await outerZip
+            .file("encrypted_my_files.zip")!
+            .async("nodebuffer");
+
+        const ivCFB = await outerZip.file("iv_cfb.bin")!.async("nodebuffer");
+        const nonceGCM = await outerZip.file("nonce_gcm.bin")!.async("nodebuffer");
+        const ephemeralPublicKeyPem = await outerZip
+            .file("ephemeral_public_key.pem")!
+            .async("string");
+
+        // 5. Decode the encrypted key and extract auth tag
+        // Since we stored it as ciphertext + 16-byte auth tag
+        const encryptedKeyBuffer = Buffer.from(encryptedKeyHex, "hex");
+        if (encryptedKeyBuffer.length < 16) {
+            throw new Error("Khóa mã hóa file bị hỏng.");
+        }
+        const encryptedKFile = encryptedKeyBuffer.subarray(0, encryptedKeyBuffer.length - 16);
+        const authTag = encryptedKeyBuffer.subarray(encryptedKeyBuffer.length - 16);
+
+        // 6. ECDH
+        const receiverPrivateKey = crypto.createPrivateKey(receiver_private_key);
+        const ephemeralPublicKey = crypto.createPublicKey(ephemeralPublicKeyPem);
+
+        const sharedSecret = crypto.diffieHellman({
+            privateKey: receiverPrivateKey,
+            publicKey: ephemeralPublicKey,
+        });
+
+        // 7. HKDF
+        const K_ECC = Buffer.from(
+            crypto.hkdfSync(
+                "sha256",
+                sharedSecret,
+                Buffer.alloc(0),
+                Buffer.from("key-exchange"),
+                32,
+            ),
+        );
+
+        // 8. AES-GCM decrypt K_file
+        const decipherGCM = crypto.createDecipheriv("aes-256-gcm", K_ECC, nonceGCM);
+        decipherGCM.setAuthTag(authTag);
+        const K_file = Buffer.concat([decipherGCM.update(encryptedKFile), decipherGCM.final()]);
+
+        // 9. AES-CFB decrypt inner zip
+        const decipherCFB = crypto.createDecipheriv("aes-256-cfb", K_file, ivCFB);
+        const innerZipBuffer = Buffer.concat([
+            decipherCFB.update(encryptedMetadataZip),
+            decipherCFB.final(),
+        ]);
+
+        // 10. Inner ZIP
+        const innerZip = await JSZip.loadAsync(innerZipBuffer);
+        const metadata = JSON.parse(await innerZip.file("metadata.json")!.async("string"));
+
+        const keys = {
+            AES1: Buffer.from(metadata.keys.AES1, "base64"),
+            AES2: Buffer.from(metadata.keys.AES2, "base64"),
+            AES3: Buffer.from(metadata.keys.AES3, "base64"),
+            "3DES1": Buffer.from(metadata.keys["3DES1"], "base64"),
+            "3DES2": Buffer.from(metadata.keys["3DES2"], "base64"),
+        };
+        const ivs = {
+            IV1: Buffer.from(metadata.ivs.IV1, "base64"),
+            IV2: Buffer.from(metadata.ivs.IV2, "base64"),
+            IV3: Buffer.from(metadata.ivs.IV3, "base64"),
+            IV4: Buffer.from(metadata.ivs.IV4, "base64"),
+            IV5: Buffer.from(metadata.ivs.IV5, "base64"),
+        };
+
+        const encryptedImage = await innerZip.file("encrypted_image.bin")!.async("nodebuffer");
+
+        // 11. 5-layer decrypt
+        const maskedBuffer = layeredDecrypt5Stages(encryptedImage, keys, ivs);
+        const masked = new Uint8Array(maskedBuffer);
+
+        // 12. Undo XNOR
+        const shuffled = inverseBitwiseXnorMasking(masked, metadata.maskSeed);
+
+        // 13. Undo Shuffle
+        const rgbBytes = inverseShuffleAndReconstruct(shuffled, metadata.shuffleSeed);
+
+        // 14. Convert rgbBytes to base64
+        const base64Data = Buffer.from(
+            rgbBytes.buffer,
+            rgbBytes.byteOffset,
+            rgbBytes.byteLength,
+        ).toString("base64");
+
+        return {
+            success: true,
+            base64Data,
+            width: metadata.image_width || metadata.width,
+            height: metadata.image_height || metadata.height,
+            filename,
+        };
+    } catch (error: any) {
+        console.error("Lỗi khi giải mã package lưu trữ:", error);
+        return {
+            success: false,
+            message: error.message || "Giải mã thất bại",
+        };
     }
 }
