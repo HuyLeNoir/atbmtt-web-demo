@@ -4,8 +4,9 @@ import { useAuth } from "@/app/context/authcontext";
 import { LucideDownload, Search, Loader2, RefreshCcw, Inbox as InboxIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getInbox, InboxRecord } from "@/lib/server_actions";
+import { getInbox } from "@/lib/server_actions";
 import { decryptStoredPackage } from "@/lib/cryptoEngine2";
+import { InboxRecord } from "@/lib/definitions";
 import { toast } from "sonner";
 import { useEffect, useState, useMemo } from "react";
 

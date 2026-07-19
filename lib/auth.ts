@@ -1,17 +1,10 @@
 "use server";
-import { ServerMessage } from "./definitions";
+import { ServerMessage, UserLoginRecord } from "./definitions";
 import crypto from "crypto";
 import pool from "@/lib/db";
-import { RowDataPacket } from "mysql2";
 import { ResultSetHeader } from "mysql2";
 import { decryptPrivateKey, createECCKeys, encryptPrivateKey } from "@/lib/server_utils";
-interface UserLoginRecord extends RowDataPacket {
-    id: number;
-    email: string;
-    password_hash: string;
-    encrypted_private_key: string;
-    public_key: string;
-}
+import { Satellite } from "lucide-react";
 
 export async function login(username: string, password: string): Promise<ServerMessage> {
     try {
@@ -19,9 +12,8 @@ export async function login(username: string, password: string): Promise<ServerM
             throw new Error("Input is incorrect");
         }
         //hash mk
-        const passwordHash = crypto.createHash("sha512").update(password).digest("hex");
         const [rows] = await pool.query<UserLoginRecord[]>(
-            `SELECT u.id, u.username, u.password_hash , uk.public_key, uk.encrypted_private_key
+            `SELECT u.id, u.username, u.password_hash ,u.passSalt, u.keySalt, uk.public_key, uk.encrypted_private_key
                 FROM users u 
                 LEFT JOIN user_keys uk ON u.id = uk.user_id 
                 WHERE u.username = ?`,
@@ -33,6 +25,7 @@ export async function login(username: string, password: string): Promise<ServerM
             //khong ton tai user
             throw new Error(`Not found user with username ${username}`);
         }
+        const passwordHash = crypto.scryptSync(password, foundUser.passSalt, 32).toString("hex");
 
         if (passwordHash !== foundUser.password_hash) {
             throw new Error("Wrong password");
@@ -46,7 +39,7 @@ export async function login(username: string, password: string): Promise<ServerM
                 decrypted_private_key: decryptPrivateKey(
                     foundUser.encrypted_private_key,
                     password,
-                    username,
+                    foundUser.keySalt,
                 ),
             },
         };
@@ -67,13 +60,15 @@ export async function register(username: string, password: string): Promise<Serv
             throw new Error("Input is incorrect");
         }
 
-        const hashed_password = crypto.createHash("sha512").update(password).digest("hex");
+        const passSalt = crypto.randomBytes(16).toString("hex");
+        const keySalt = crypto.randomBytes(16).toString("hex");
+        const hashed_password = crypto.scryptSync(password, passSalt, 32).toString("hex");
 
         const { publicKey, privateKey } = createECCKeys();
-        const encrypted_private_key = encryptPrivateKey(privateKey, password, username);
+        const encrypted_private_key = encryptPrivateKey(privateKey, password, keySalt);
         const [userResult] = await connection.query<ResultSetHeader>(
-            "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-            [username, hashed_password],
+            "INSERT INTO users (username, password_hash, passSalt, keySalt) VALUES (?, ?,?,?)",
+            [username, hashed_password, passSalt, keySalt],
         );
         const userId = userResult.insertId;
         await connection.query(

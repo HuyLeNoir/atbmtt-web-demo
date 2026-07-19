@@ -3,6 +3,12 @@ import crypto from "crypto";
 import JSZip from "jszip";
 import fs from "fs/promises";
 import { publicKeyFromUsername } from "@/lib/server_actions";
+import {
+    EncryptResult,
+    EncryptInput,
+    encrypted_k_file,
+    CreatePackageRecordInput
+} from "./definitions";
 function createPRNG(seed: number) {
     let h = seed | 0;
     return function () {
@@ -262,27 +268,7 @@ function generateCryptoKeysAndIVs() {
 //     }
 // }
 
-export interface EncryptResult {
-    finalZip: Buffer;
-    encryptedFileKeys: encrypted_k_file[];
-    originalFilename: string;
-    signature?: Buffer;
-}
 
-export interface EncryptInput {
-    //id_send
-    //id_receive
-    username_send: string;
-    recipients: string[];
-    filename: string;
-    image_byte: Uint8Array;
-    image_width: number;
-    image_height: number;
-}
-interface encrypted_k_file {
-    recipient: string;
-    encrypted_key: Buffer;
-}
 export async function encryptPackage(input: EncryptInput): Promise<EncryptResult> {
     const { username_send, recipients, image_byte, image_width, image_height } = input;
 
@@ -368,7 +354,6 @@ export async function encryptPackage(input: EncryptInput): Promise<EncryptResult
             encrypted_key: encrypted_key_with_tag,
         });
     }
-    // const auth_tag = cipher_gcm.getAuthTag();
 
     // 9. Package final outer zip
     const outerZip = new JSZip();
@@ -404,15 +389,7 @@ export async function savePackage(file: Buffer, filename: string): Promise<strin
 
 import pool from "@/lib/db";
 
-interface CreatePackageRecordInput {
-    ownerUsername: string;
-    recipients: { recipientUsername: string; encryptedFileKey: Buffer }[];
 
-    filename: string;
-    storagePath: string;
-
-    signature?: Buffer;
-}
 
 export async function createPackageRecord(input: CreatePackageRecordInput) {
     const conn = await pool.getConnection();

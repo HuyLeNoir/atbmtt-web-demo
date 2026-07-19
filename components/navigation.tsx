@@ -2,9 +2,7 @@ import { Image as ImageIcon, Shield, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-interface NavigationProps {
-    className?: string;
-}
+import { NavigationProps } from "@/lib/definitions";
 
 export default function Navigation({ className = "" }: NavigationProps) {
     return (

@@ -1,21 +1,7 @@
 "use client"; // Bắt buộc phải có trong Next.js App Router
 
 import React, { createContext, useContext, useState, ReactNode } from "react";
-
-// 1. Định nghĩa kiểu dữ liệu cho State
-interface AuthData {
-    id: string | null;
-    username: string | null;
-    decrypt_private_key: string | null;
-}
-
-// 2. Định nghĩa kiểu dữ liệu cho Context gồm state và hàm cập nhật state
-interface AuthContextType {
-    auth: AuthData;
-    setAuth: React.Dispatch<React.SetStateAction<AuthData>>;
-    loginUser: (id: string, username: string, privateKey: string) => void;
-    logoutUser: () => void;
-}
+import { AuthData, AuthContextType } from "@/lib/definitions";
 
 // 3. Khởi tạo Context với giá trị mặc định là undefined
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

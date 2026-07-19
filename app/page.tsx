@@ -78,7 +78,7 @@ export default function App() {
             toast.error(`Đăng nhập thất bại. Lỗi: ${result.message}`);
             return;
         }
-        loginUser(result.package?.id, username, loginResult.package?.decrypted_private_key);
+        loginUser(loginResult.package?.id, username, loginResult.package?.decrypted_private_key);
         toast.success("Đăng ký thành công");
         router.push("/inbox");
     }

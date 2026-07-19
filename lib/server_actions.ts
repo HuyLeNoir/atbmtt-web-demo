@@ -1,27 +1,13 @@
 "use server";
-import mysql, { RowDataPacket } from "mysql2";
-import { ServerMessage } from "./definitions";
+import mysql from "mysql2";
+import {
+    ServerMessage,
+    UserKeyRecord,
+    InboxRecord,
+    PublicKeyResponse,
+    getInboxResponse
+} from "./definitions";
 import pool from "@/lib/db";
-interface UserKeyRecord extends RowDataPacket {
-    username: string;
-    public_key: string;
-}
-
-export interface InboxRecord extends RowDataPacket {
-    id: number;
-    owner_username: string;
-    filename: string;
-    storage_path: string;
-    encrypted_file_key: string;
-    message: string | undefined | null;
-}
-//dinh nghia them package
-interface PublicKeyResponse extends ServerMessage {
-    package?: {
-        username: string;
-        public_key: string;
-    };
-}
 
 export async function publicKeyFromUsername(username: string): Promise<PublicKeyResponse> {
     if (!username) {
@@ -54,9 +40,7 @@ export async function publicKeyFromUsername(username: string): Promise<PublicKey
     }
 }
 
-interface getInboxResponse extends ServerMessage {
-    package?: InboxRecord[];
-}
+
 export async function getInbox(recipient_id: string): Promise<getInboxResponse> {
     try {
         if (!recipient_id) throw new Error("Lỗi: Không có recipient_id");
