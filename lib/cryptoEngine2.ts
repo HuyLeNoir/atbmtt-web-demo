@@ -2,12 +2,13 @@
 import crypto from "crypto";
 import JSZip from "jszip";
 import fs from "fs/promises";
+import pool from "@/lib/db";
 import { publicKeyFromUsername } from "@/lib/server_actions";
 import {
     EncryptResult,
     EncryptInput,
     encrypted_k_file,
-    CreatePackageRecordInput
+    CreatePackageRecordInput,
 } from "./definitions";
 function createPRNG(seed: number) {
     let h = seed | 0;
@@ -20,35 +21,42 @@ function createPRNG(seed: number) {
         return (z >>> 0) / 4294967296;
     };
 }
-
-// Pixel Shuffling
-function preprocessAndShuffle(pixels: Uint8Array, seed: number) {
-    const len = pixels.length;
+function getRandomShuffleIndices(len: number, seed: number): Uint32Array {
     const indices = new Uint32Array(len);
-
     for (let i = 0; i < len; i++) {
         indices[i] = i;
     }
-
-    const rand = createPRNG(seed);
-    // Fisher-Yates shuffle
+    let h = seed | 0;
+    let z = 0;
+    let j = 0;
     for (let i = len - 1; i > 0; i--) {
-        const j = Math.floor(rand() * (i + 1));
+        h = (h + 0x9e3779b9) | 0;
+        z = h;
+        z = Math.imul(z ^ (z >>> 16), 0x21f0aa7b);
+        z = Math.imul(z ^ (z >>> 15), 0x735a2d97);
+        z = z ^ (z >>> 15);
+        z = (z >>> 0) / 4294967296;
+        j = (z * (i + 1)) | 0; //lay chi so random tu 0->i+1
         const temp = indices[i];
         indices[i] = indices[j];
         indices[j] = temp;
     }
-
+    return indices;
+}
+// Pixel Shuffling
+function preprocessAndShuffle(pixels: Uint8Array, seed: number) {
+    const len = pixels.length;
+    const indices = getRandomShuffleIndices(len, seed);
     const shuffled = new Uint8Array(len);
     for (let i = 0; i < len; i++) {
         shuffled[i] = pixels[indices[i]];
     }
-    return { shuffled, indices };
+    return shuffled;
 }
 
 function inverseShuffleAndReconstruct(shuffled: Uint8Array, seed: number): Uint8Array {
     const len = shuffled.length;
-    const { indices } = preprocessAndShuffle(shuffled, seed); // Use a dummy seed to get the original indices
+    const indices = getRandomShuffleIndices(len, seed);
     const original = new Uint8Array(len);
     for (let i = 0; i < len; i++) {
         original[indices[i]] = shuffled[i];
@@ -156,119 +164,6 @@ function generateCryptoKeysAndIVs() {
     };
 }
 
-// export async function EncryptAndSend(input: EncryptInput): Promise<ServerMessage> {
-//     const { username_send, recipients, image_byte, image_width, image_height } = input;
-
-//     if (!image_byte || image_byte.length === 0) {
-//         throw new Error("Dữ liệu hình ảnh RGB không hợp lệ hoặc trống.");
-//     }
-
-//     try {
-//         const shuffleSeed = crypto.randomBytes(4).readUInt32LE(0);
-//         const maskSeed = crypto.randomBytes(4).readUInt32LE(0);
-
-//         const { shuffled, indices } = preprocessAndShuffle(image_byte, shuffleSeed);
-
-//         const { masked } = bitwiseXnorMasking(shuffled, maskSeed);
-
-//         const bMaskedBuffer = Buffer.from(masked.buffer, masked.byteOffset, masked.byteLength);
-
-//         const { keys, ivs } = generateCryptoKeysAndIVs();
-
-//         const C5 = layeredEncrypt5Stages(bMaskedBuffer, keys, ivs);
-
-//         const metadata = {
-//             image_width,
-//             image_height,
-//             shuffleSeed,
-//             maskSeed,
-//             keys: Object.fromEntries(
-//                 Object.entries(keys).map(([k, v]) => [k, v.toString("base64")]),
-//             ),
-//             ivs: Object.fromEntries(Object.entries(ivs).map(([k, v]) => [k, v.toString("base64")])),
-//         };
-//         //package
-//         const innerZip = new JSZip();
-//         innerZip.file("metadata.json", JSON.stringify(metadata, null, 2));
-//         innerZip.file("encrypted_image.bin", C5);
-//         const innerZipBuffer = await innerZip.generateAsync({ type: "nodebuffer" });
-//         const K_file = crypto.randomBytes(32);
-//         const iv_cfb = crypto.randomBytes(16);
-//         const cipher_cfb = crypto.createCipheriv("aes-256-cfb", K_file, iv_cfb);
-//         //ma hoa metadata va img
-//         const encrypted_metadata_zip = Buffer.concat([
-//             cipher_cfb.update(innerZipBuffer),
-//             cipher_cfb.final(),
-//         ]);
-
-//         const ephemeralKey = crypto.generateKeyPairSync("ec", {
-//             namedCurve: "prime256v1",
-//         });
-
-//         // Import receiver's public key
-//         const res = await publicKeyFromUsername(username_receive);
-//         if (!res.success) {
-//             return { success: false, message: "có lỗi khi truy xuất public key người nhận" };
-//         }
-//         const receiver_public_key = res.package?.public_key;
-//         if (!receiver_public_key) {
-//             return {
-//                 success: false,
-//                 message: "PublicKeyNotFound",
-//             };
-//         }
-//         const receiverPubKeyObject = crypto.createPublicKey(receiver_public_key);
-
-//         // Compute Shared Secret
-//         const sharedSecret = crypto.diffieHellman({
-//             privateKey: ephemeralKey.privateKey,
-//             publicKey: receiverPubKeyObject,
-//         });
-
-//         // Derive K_ECC via HKDF
-//         const K_ECC = Buffer.from(
-//             crypto.hkdfSync(
-//                 "sha256",
-//                 sharedSecret,
-//                 Buffer.alloc(0),
-//                 Buffer.from("key-exchange"),
-//                 32,
-//             ),
-//         );
-
-//         // 8. Encrypt K_file using AES-256-GCM based on K_ECC
-//         const nonce_gcm = crypto.randomBytes(12);
-//         const cipher_gcm = crypto.createCipheriv("aes-256-gcm", K_ECC, nonce_gcm);
-//         const encrypted_k_file = Buffer.concat([cipher_gcm.update(K_file), cipher_gcm.final()]);
-//         const auth_tag = cipher_gcm.getAuthTag();
-
-//         // 9. Package final outer zip
-//         const outerZip = new JSZip();
-//         outerZip.file("encrypted_my_files.zip", encrypted_metadata_zip);
-//         outerZip.file("encrypted_aes_key.bin", encrypted_k_file);
-//         outerZip.file("iv_cfb.bin", iv_cfb);
-//         outerZip.file("nonce_gcm.bin", nonce_gcm);
-//         outerZip.file("auth_tag.bin", auth_tag);
-//         outerZip.file(
-//             "ephemeral_public_key.pem",
-//             ephemeralKey.publicKey.export({ type: "spki", format: "pem" }),
-//         );
-
-//         const finalZipBuffer = await outerZip.generateAsync({ type: "nodebuffer" });
-//         return {
-//             success: true,
-//             message: "Gui file thanh cong",
-//         };
-//     } catch (error: any) {
-//         console.error("Lỗi trong quá trình mã hóa ảnh:", error);
-//         return {
-//             success: false,
-//             message: error.message,
-//         };
-//     }
-// }
-
-
 export async function encryptPackage(input: EncryptInput): Promise<EncryptResult> {
     const { username_send, recipients, image_byte, image_width, image_height } = input;
 
@@ -279,7 +174,7 @@ export async function encryptPackage(input: EncryptInput): Promise<EncryptResult
     const shuffleSeed = crypto.randomBytes(4).readUInt32LE(0);
     const maskSeed = crypto.randomBytes(4).readUInt32LE(0);
 
-    const { shuffled, indices } = preprocessAndShuffle(image_byte, shuffleSeed);
+    const shuffled = preprocessAndShuffle(image_byte, shuffleSeed);
 
     const { masked } = bitwiseXnorMasking(shuffled, maskSeed);
 
@@ -319,10 +214,11 @@ export async function encryptPackage(input: EncryptInput): Promise<EncryptResult
     //modifed to be multi receipients here
     const nonce_gcm = crypto.randomBytes(12);
     const encrypted_recipients_key: encrypted_k_file[] = [];
+
     for (const recipient of recipients) {
         const res = await publicKeyFromUsername(recipient); //ERROR
         const receiver_public_key = res.package?.public_key;
-        console.log(receiver_public_key);
+        // console.log(receiver_public_key);
         if (!receiver_public_key) {
             throw new Error("Không tìm thấy public key của người nhận.");
         }
@@ -387,10 +283,6 @@ export async function savePackage(file: Buffer, filename: string): Promise<strin
     return storagePath;
 }
 
-import pool from "@/lib/db";
-
-
-
 export async function createPackageRecord(input: CreatePackageRecordInput) {
     const conn = await pool.getConnection();
 
@@ -449,7 +341,6 @@ export async function createPackageRecord(input: CreatePackageRecordInput) {
 }
 
 export async function EncryptAndSend(input: EncryptInput) {
-    console.log("EncryptAndSend called");
     // 1. Encrypt package
     const encrypted = await encryptPackage(input);
 
@@ -592,8 +483,8 @@ export async function decryptImage(input: { zipFile: File; receiver_private_key:
         return {
             success: true,
             rgbBytes,
-            width: metadata.width,
-            height: metadata.height,
+            width: metadata.image_width,
+            height: metadata.image_height,
         };
     } catch (error) {
         throw new Error("Giai ma that bai");
@@ -601,13 +492,12 @@ export async function decryptImage(input: { zipFile: File; receiver_private_key:
 }
 
 export async function decryptStoredPackage(input: {
-    storagePath: string;
-    recipientUsername: string;
+    storagePath: string; // lay tu client
+    recipientUsername: string; //lay thong tin nguoi nhan de su dung dung khoa
     receiver_private_key: string;
 }) {
     try {
         const { storagePath, recipientUsername, receiver_private_key } = input;
-        // 1. Get recipient ID
         const conn = await pool.getConnection();
         let recipientId: number;
         let encryptedKeyHex: string;
@@ -621,7 +511,7 @@ export async function decryptStoredPackage(input: {
             }
             recipientId = userRows[0].id;
 
-            // 2. Fetch the package and verify recipient
+            //xac nhan xem co dung la nguoi nhan cua package do khong
             const [pkgRows]: any = await conn.execute(
                 `SELECT pk.id as package_id, pk.filename, pk_re.encrypted_file_key 
                     FROM packages pk 
@@ -644,7 +534,7 @@ export async function decryptStoredPackage(input: {
 
         // 4. Outer ZIP
         const outerZip = await JSZip.loadAsync(archiveBuffer);
-
+        //convert buffer sang định dạng zip
         const encryptedMetadataZip = await outerZip
             .file("encrypted_my_files.zip")!
             .async("nodebuffer");
@@ -655,9 +545,7 @@ export async function decryptStoredPackage(input: {
             .file("ephemeral_public_key.pem")!
             .async("string");
 
-        // 5. Decode the encrypted key and extract auth tag
-        // Since we stored it as ciphertext + 16-byte auth tag
-        const encryptedKeyBuffer = Buffer.from(encryptedKeyHex, "hex");
+        const encryptedKeyBuffer = Buffer.from(encryptedKeyHex, "hex"); //lay ra encrypted K_file, authTag
         if (encryptedKeyBuffer.length < 16) {
             throw new Error("Khóa mã hóa file bị hỏng.");
         }
@@ -737,8 +625,8 @@ export async function decryptStoredPackage(input: {
         return {
             success: true,
             base64Data,
-            width: metadata.image_width || metadata.width,
-            height: metadata.image_height || metadata.height,
+            width: metadata.image_width,
+            height: metadata.image_height,
             filename,
         };
     } catch (error: any) {

@@ -62,7 +62,7 @@ export async function register(username: string, password: string): Promise<Serv
 
         const passSalt = crypto.randomBytes(16).toString("hex");
         const keySalt = crypto.randomBytes(16).toString("hex");
-        const hashed_password = crypto.scryptSync(password, passSalt, 32).toString("hex");
+        const hashed_password = crypto.scryptSync(password, passSalt, 32).toString("hex"); //hash 256 bit
 
         const { publicKey, privateKey } = createECCKeys();
         const encrypted_private_key = encryptPrivateKey(privateKey, password, keySalt);
