@@ -22,7 +22,7 @@ export function encryptPrivateKey(
     password: string,
     keySalt: string,
 ): string {
-    const key = crypto.scryptSync(password, keySalt, 32);
+    const key = crypto.scryptSync(password, keySalt, 32); //KDF
     const iv = crypto.randomBytes(16); // Initialization Vector cho cbc
     const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
 

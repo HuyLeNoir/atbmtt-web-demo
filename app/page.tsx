@@ -98,11 +98,6 @@ export default function App() {
                             Quyền riêng tư của bạn là ưu tiên hàng đầu với kiến trúc Zero-Knowledge,
                             bảo mật tệp nén qua ECDH (ECC P-256) và AES-GCM phong bì.
                         </p>
-                        {/* <div className="flex max-w-lg gap-5">
-                            <Button size={"lg"} className={"cursor-pointer text-2xl px-5 py-8"}>
-                                Come to Action
-                            </Button>
-                        </div> */}
                     </div>
                     <div className="col-span-12 md:col-span-5 flex items-center">
                         <div className="overflow-hidden rounded-lg border-10 border-border w-full">
@@ -150,127 +145,131 @@ export default function App() {
                 </div>
                 {/* Key gen used to be here*/}
                 {/* login/logout */}
-                <div className="Login/logout contianer w-full mt-5 min-h-100">
-                    <h1 className="text-primary font-bold text-4xl mb-10 text-center">
-                        Đăng Nhập/Đăng Ký
-                    </h1>
-                    {/* Đăng nhập */}
-                    {authTab === "login" && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Đăng nhập</CardTitle>
-                                <CardAction>
-                                    <span>Chưa có tài khoản?</span>
+                <div className="Login/logout w-full flex justify-center contianer mt-5 min-h-100">
+                    <div className="md:w-200 w-full">
+                        <h1 className="text-primary font-bold text-4xl mb-10 text-center">
+                            Đăng Nhập/Đăng Ký
+                        </h1>
+                        {/* Đăng nhập */}
+                        {authTab === "login" && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Đăng nhập</CardTitle>
+                                    <CardAction>
+                                        <span>Chưa có tài khoản?</span>
+                                        <Button
+                                            onClick={() => {
+                                                setAuthTab("register");
+                                            }}
+                                            className={"cursor-pointer"}
+                                            variant="link"
+                                        >
+                                            Đăng ký ngay
+                                        </Button>
+                                    </CardAction>
+                                </CardHeader>
+                                <CardContent>
+                                    <form id="login-form" onSubmit={handleLogin}>
+                                        <div className="flex flex-col gap-6">
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="account">Tài khoản</Label>
+                                                <Input
+                                                    id="account"
+                                                    name="username"
+                                                    type="text"
+                                                    placeholder="Vui lòng nhập tên tài khoản"
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="grid gap-2" id="login">
+                                                <Label htmlFor="password">Password</Label>
+                                                <Input
+                                                    name="password"
+                                                    id="password"
+                                                    type="password"
+                                                    required
+                                                />
+                                            </div>
+                                        </div>
+                                    </form>
+                                </CardContent>
+                                <CardFooter className="flex-col gap-2">
                                     <Button
-                                        onClick={() => {
-                                            setAuthTab("register");
-                                        }}
-                                        className={"cursor-pointer"}
-                                        variant="link"
+                                        form="login-form"
+                                        type="submit"
+                                        className="cursor-pointer w-full"
                                     >
-                                        Đăng ký ngay
+                                        Đăng nhập
                                     </Button>
-                                </CardAction>
-                            </CardHeader>
-                            <CardContent>
-                                <form id="login-form" onSubmit={handleLogin}>
-                                    <div className="flex flex-col gap-6">
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="account">Tài khoản</Label>
-                                            <Input
-                                                id="account"
-                                                name="username"
-                                                type="text"
-                                                placeholder="Vui lòng nhập tên tài khoản"
-                                                required
-                                            />
+                                </CardFooter>
+                            </Card>
+                        )}
+                        {/* Đăng ký */}
+                        {authTab == "register" && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Đăng ký</CardTitle>
+                                    <CardAction>
+                                        <span>Đã có tài khoản?</span>
+                                        <Button
+                                            onClick={() => {
+                                                setAuthTab("login");
+                                            }}
+                                            className={"cursor-pointer"}
+                                            variant="link"
+                                        >
+                                            Đăng nhập ngay
+                                        </Button>
+                                    </CardAction>
+                                </CardHeader>
+                                <CardContent>
+                                    <form id="register-form" onSubmit={handleRegister}>
+                                        <div className="flex flex-col gap-6">
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="account">Tài khoản</Label>
+                                                <Input
+                                                    name="username"
+                                                    id="account"
+                                                    type="text"
+                                                    placeholder="Vui lòng nhập tên tài khoản"
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="grid gap-2" id="login">
+                                                <Label htmlFor="password">Password</Label>
+                                                <Input
+                                                    name="password"
+                                                    id="password"
+                                                    type="password"
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="grid gap-2" id="login">
+                                                <Label htmlFor="re-password">
+                                                    Nhập lại password
+                                                </Label>
+                                                <Input
+                                                    name="repassword"
+                                                    id="repassword"
+                                                    type="password"
+                                                    required
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="grid gap-2" id="login">
-                                            <Label htmlFor="password">Password</Label>
-                                            <Input
-                                                name="password"
-                                                id="password"
-                                                type="password"
-                                                required
-                                            />
-                                        </div>
-                                    </div>
-                                </form>
-                            </CardContent>
-                            <CardFooter className="flex-col gap-2">
-                                <Button
-                                    form="login-form"
-                                    type="submit"
-                                    className="cursor-pointer w-full"
-                                >
-                                    Đăng nhập
-                                </Button>
-                            </CardFooter>
-                        </Card>
-                    )}
-                    {/* Đăng ký */}
-                    {authTab == "register" && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Đăng ký</CardTitle>
-                                <CardAction>
-                                    <span>Đã có tài khoản?</span>
+                                    </form>
+                                </CardContent>
+                                <CardFooter className="flex-col gap-2">
                                     <Button
-                                        onClick={() => {
-                                            setAuthTab("login");
-                                        }}
-                                        className={"cursor-pointer"}
-                                        variant="link"
+                                        form="register-form"
+                                        type="submit"
+                                        className="cursor-pointer w-full"
                                     >
-                                        Đăng nhập ngay
+                                        Đăng ký
                                     </Button>
-                                </CardAction>
-                            </CardHeader>
-                            <CardContent>
-                                <form id="register-form" onSubmit={handleRegister}>
-                                    <div className="flex flex-col gap-6">
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="account">Tài khoản</Label>
-                                            <Input
-                                                name="username"
-                                                id="account"
-                                                type="text"
-                                                placeholder="Vui lòng nhập tên tài khoản"
-                                                required
-                                            />
-                                        </div>
-                                        <div className="grid gap-2" id="login">
-                                            <Label htmlFor="password">Password</Label>
-                                            <Input
-                                                name="password"
-                                                id="password"
-                                                type="password"
-                                                required
-                                            />
-                                        </div>
-                                        <div className="grid gap-2" id="login">
-                                            <Label htmlFor="re-password">Nhập lại password</Label>
-                                            <Input
-                                                name="repassword"
-                                                id="repassword"
-                                                type="password"
-                                                required
-                                            />
-                                        </div>
-                                    </div>
-                                </form>
-                            </CardContent>
-                            <CardFooter className="flex-col gap-2">
-                                <Button
-                                    form="register-form"
-                                    type="submit"
-                                    className="cursor-pointer w-full"
-                                >
-                                    Đăng ký
-                                </Button>
-                            </CardFooter>
-                        </Card>
-                    )}
+                                </CardFooter>
+                            </Card>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

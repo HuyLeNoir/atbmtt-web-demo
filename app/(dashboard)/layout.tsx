@@ -75,7 +75,7 @@ export default function personalLayout({ children }: { children: React.ReactNode
                     rgbFlatBytes[rgbIdx + 1] = data[i + 1]; // G
                     rgbFlatBytes[rgbIdx + 2] = data[i + 2]; // B
                     rgbIdx += 3;
-                }
+                } //[r,g,b,r,g,b....]
                 setUploadedImage({
                     file: file,
                     filename: file.name,

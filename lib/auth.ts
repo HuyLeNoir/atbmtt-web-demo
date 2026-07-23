@@ -4,7 +4,6 @@ import crypto from "crypto";
 import pool from "@/lib/db";
 import { ResultSetHeader } from "mysql2";
 import { decryptPrivateKey, createECCKeys, encryptPrivateKey } from "@/lib/server_utils";
-import { Satellite } from "lucide-react";
 
 export async function login(username: string, password: string): Promise<ServerMessage> {
     try {
